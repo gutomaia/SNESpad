@@ -26,68 +26,59 @@
 
 #include "SPI.h"
 
-volatile unsigned char latchedByte;              // Controller press byte value = one letter in tweet
-volatile unsigned char bitCount;                    // A single LDA $4017 (get one bit from "controller press")
-volatile unsigned char byteCount;                   // How many bytes have already been printed
-volatile unsigned char bytesToTransfer;             // How many bytes are left to print
+volatile int p1_button;
+volatile int p2_button;
+
+volatile int bitCount;
+
+volatile int p1_bit;
+volatile int p2_bit;
+
+#define ARRAYSIZE 12
+String button[ARRAYSIZE] = { "B" ,"Y" ,"SELECT" ,"START" ,"UP" ,"DOWN" ,"LEFT" ,"RIGHT" ,"A" ,"X" ,"L" ,"R" };
+
+
 String inputString = "";
 unsigned char pressedButton;
 
 void ClockNES() {
-    digitalWrite(SNES_P1_DATA, latchedByte & 0x01);
-    latchedByte >>= 1;
-    // bitCount++;
+    digitalWrite(SNES_P1_DATA, bitCount == p1_bit);
+    bitCount++;
 }
 
 void LatchNES() {
-    if (pressedButton != 0xFFFF) {
-        latchedByte = pressedButton;
-        digitalWrite(SNES_P1_DATA, latchedByte & 0x01);
-        latchedByte >>=1;
-        // bitCount = 0;
-        pressedButton = 0xFFFF;
+    if (p1_button != 0xFF) {
+        p1_bit = p1_button;
+        bitCount = 0;
+        digitalWrite(SNES_P1_DATA, bitCount == p1_bit);
+        bitCount++;
+        p1_button = 0xFF;
     }
 }
 
 void OnPress(String event, String data) {
     // B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R
-    if (data == "B") {
-        pressedButton = B10000000; // pow(2, 0)
-    } else if (data == "Y") {
-        pressedButton = pow(2, 1);
-    } else if ( data == "SELECT" ) {
-        pressedButton = pow(2, 2);
-    } else if ( data == "START" ) {
-        pressedButton = pow(2, 3);
-    } else if ( data == "UP" ) {
-        pressedButton = pow(2, 4);
-    } else if ( data == "DOWN" ) {
-        pressedButton = pow(2, 5);
-    } else if ( data == "LEFT" ) {
-        pressedButton = pow(2, 6);
-    } else if ( data == "RIGHT" ) {
-        pressedButton = pow(2, 7);
-    }
-    //  else if ( data == "A" ) {
-    //     pressedButton = pow(2, 8);
-    // }
-    // else if ( data == "X" ) {
-    //     pressedButton = pow(2, 9);
-    // } else if ( data == "L" ) {
-    //     pressedButton = pow(2, 10);
-    // } else if ( data == "R" ) {
-    //     pressedButton = pow(2, 11);
-    // }
+    for (int i =0; i< ARRAYSIZE; i++){
+            if(data == button[i] ){
+                p1_button = i;
+                break;
+            }
+        }
+
 }
 
 void serialEvent() {
   while (Serial.available()) {
     char inChar = (char)Serial.read();
-    inputString += inChar;
-    if (inChar == '8') {
-       OnPress("any", inputString);
-       inputString = "";
-       Serial.println("OK");
+    Serial.print(inChar);
+    if (inChar == ';') {
+        OnPress("any", inputString);
+        inputString = "";
+        Serial.println(p1_button);
+        Serial.println(p1_bit);
+        Serial.println("OK");
+    } else {
+        inputString += inChar;
     }
   }
 }
@@ -105,12 +96,6 @@ void setup() {
     attachInterrupt(SNES_CLOCK, ClockNES, FALLING);  // When NES clock ends, execute ClockNES
     attachInterrupt(SNES_P1_LATCH, LatchNES, RISING);   // When NES latch fires, execure LatchNES
 
-    byteCount = 0;                                  // Initialize byteCount at zero, no letters printed to screen
-    bytesToTransfer = 0;                            // Initialize bytesToTransfer at zero, no letters waiting to print to screen
-
-    pressedButton = 0xFFFF;
-
-    OnPress("any", "B");
 }
 
 void loop() {
